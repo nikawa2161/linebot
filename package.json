@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "@line/bot-sdk": "^9.2.2",
+    "@paypayopa/paypayopa-sdk-node": "^2.1.0",
     "hono": "^4.4.6"
   },
   "devDependencies": {
