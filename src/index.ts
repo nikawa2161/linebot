@@ -1,4 +1,5 @@
-import { Hono } from 'hono'
+import * as line from "@line/bot-sdk";
+import { Hono } from "hono";
 
 type Bindings = {
   LINE_CHANNEL_ACCESS_TOKEN: string;
@@ -7,16 +8,68 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-
-app.get('/', (c) => {
-  return c.text('Hello Hono!')
-})
-
-app.get('/api/hello', (c) => {
+app.get("/", (c) => {
   return c.json({
-    ok: true,
-    message: 'Hello Hono!',
-  })
-})
+    message: "success",
+  });
+});
+app.post("/", (c) => {
+  return c.json({
+    message: "success",
+  });
+});
 
-export default app
+const textEventHandler = async (
+  client: line.messagingApi.MessagingApiClient,
+  event: line.WebhookEvent
+): Promise<line.MessageAPIResponseBase | undefined> => {
+  if (event.type !== "message" || event.message.type !== "text") {
+    return;
+  }
+
+  const { replyToken, message: { text } = {} } = event;
+
+  const response: line.TextMessage = {
+    type: "text",
+    text: `${text}を取得しました`,
+  };
+
+  const replyMessageRequest: line.messagingApi.ReplyMessageRequest = {
+    replyToken: replyToken,
+    messages: [response],
+  };
+
+  await client.replyMessage(replyMessageRequest);
+};
+
+app.post("/webhook", async (c) => {
+  const config: line.ClientConfig = {
+    channelAccessToken: c.env.LINE_CHANNEL_ACCESS_TOKEN,
+  };
+  const client = new line.messagingApi.MessagingApiClient(config);
+  line.middleware({ channelSecret: c.env.LINE_CHANNEL_SECRET });
+
+  const events: line.WebhookEvent[] = await c.req
+    .json()
+    .then((data) => data.events);
+
+  await Promise.all(
+    events.map(async (event: line.WebhookEvent) => {
+      try {
+        await textEventHandler(client, event);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          if (err.message === "no channel secret") {
+            console.error(err, c.env.LINE_CHANNEL_SECRET);
+          }
+          console.error(err);
+        }
+        return c.status(500);
+      }
+    })
+  );
+
+  return c.status(200);
+});
+
+export default app;
